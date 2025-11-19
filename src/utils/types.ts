@@ -1,3 +1,5 @@
+import type { Session } from "next-auth";
+
 export type Post = {
   id: string;
   content: string | null;
@@ -11,3 +13,4 @@ export type Post = {
     image: string | null;
   };
 };
+export type SessionType = Session | null;

@@ -174,6 +174,29 @@ export const friendRouter = createTRPCRouter({
 
     return friendships.map((f) => f.friend);
   }),
+  cancelRequest: protectedProcedure
+    .input(z.object({ requestId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const request = await ctx.db.friendRequest.findFirst({
+        where: {
+          id: input.requestId,
+          fromUserId: ctx.session.user.id, // Only the sender can cancel
+          status: "PENDING",
+        },
+      });
+
+      if (!request) {
+        throw new Error(
+          "Friend request not found or you don't have permission to cancel it",
+        );
+      }
+
+      await ctx.db.friendRequest.delete({
+        where: { id: input.requestId },
+      });
+
+      return { success: true };
+    }),
 
   // Check Friendship Status
   getFriendshipStatus: protectedProcedure
