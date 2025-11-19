@@ -5,13 +5,20 @@ import { ZodError } from "zod";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 
-export const createTRPCContext = async (opts: CreateNextContextOptions) => {
+// Create a unified context type that works with both App Router and Pages Router
+type CreateContextOptions = {
+  headers?: Headers;
+  req?: Request;
+};
+
+export const createTRPCContext = async (opts: CreateContextOptions) => {
   const session = await auth();
 
   return {
     db,
     session,
-    ...opts,
+    headers: opts.headers,
+    req: opts.req,
   };
 };
 

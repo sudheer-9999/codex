@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
+import type { Post } from "~/utils/types";
 
 export function PostsFeed() {
   const { data: session } = useSession();
@@ -28,7 +29,7 @@ export function PostsFeed() {
     },
   });
 
-  const startEditing = (post: unknown) => {
+  const startEditing = (post: Post) => {
     setEditingPostId(post.id);
     setEditContent(post.content ?? "");
     setEditImage(post.image ?? "");
