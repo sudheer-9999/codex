@@ -1,41 +1,114 @@
 import { z } from "zod";
-
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  publicProcedure,
-} from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
 export const postRouter = createTRPCRouter({
-  hello: publicProcedure
-    .input(z.object({ text: z.string() }))
-    .query(({ input }) => {
-      return {
-        greeting: `Hello ${input.text}`,
-      };
-    }),
-
+  // Create Post
   create: protectedProcedure
-    .input(z.object({ name: z.string().min(1) }))
+    .input(
+      z.object({
+        content: z.string().optional(),
+        image: z.string().optional(),
+        video: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       return ctx.db.post.create({
         data: {
-          name: input.name,
-          createdBy: { connect: { id: ctx.session.user.id } },
+          content: input.content,
+          image: input.image,
+          video: input.video,
+          authorId: ctx.session.user.id,
+        },
+        include: {
+          author: {
+            select: {
+              name: true,
+              image: true,
+              id: true,
+            },
+          },
         },
       });
     }),
 
-  getLatest: protectedProcedure.query(async ({ ctx }) => {
-    const post = await ctx.db.post.findFirst({
-      orderBy: { createdAt: "desc" },
-      where: { createdBy: { id: ctx.session.user.id } },
+  // Get All Posts
+  getAll: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.db.post.findMany({
+      include: {
+        author: {
+          select: {
+            name: true,
+            image: true,
+            id: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
-
-    return post ?? null;
   }),
 
-  getSecretMessage: protectedProcedure.query(() => {
-    return "you can now see this secret message!";
-  }),
+  // Update Post
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        content: z.string().optional(),
+        image: z.string().optional(),
+        video: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Check if user owns the post
+      const post = await ctx.db.post.findFirst({
+        where: {
+          id: input.id,
+          authorId: ctx.session.user.id,
+        },
+      });
+
+      if (!post) {
+        throw new Error("Post not found or you don't have permission");
+      }
+
+      return ctx.db.post.update({
+        where: { id: input.id },
+        data: {
+          content: input.content,
+          image: input.image,
+          video: input.video,
+        },
+        include: {
+          author: {
+            select: {
+              name: true,
+              image: true,
+              id: true,
+            },
+          },
+        },
+      });
+    }),
+
+  // Delete Post
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Check if user owns the post
+      const post = await ctx.db.post.findFirst({
+        where: {
+          id: input.id,
+          authorId: ctx.session.user.id,
+        },
+      });
+
+      if (!post) {
+        throw new Error("Post not found or you don't have permission");
+      }
+
+      return ctx.db.post.delete({
+        where: { id: input.id },
+      });
+    }),
 });
