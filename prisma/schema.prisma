@@ -1,75 +1,136 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
-    provider = "prisma-client-js"
-    output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "sqlite"
-    // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
-    // Further reading:
-    // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
-    // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
-    url      = env("DATABASE_URL")
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
+model Friendship {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  user      User     @relation("UserFriends", fields: [userId], references: [id])
+  userId    String   @db.ObjectId
+  friend    User     @relation("FriendUsers", fields: [friendId], references: [id])
+  friendId  String   @db.ObjectId
+  createdAt DateTime @default(now())
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    createdBy   User   @relation(fields: [createdById], references: [id])
-    createdById String
-
-    @@index([name])
-}
-
-// Necessary for Next auth
-model Account {
-    id                       String  @id @default(cuid())
-    userId                   String
-    type                     String
-    provider                 String
-    providerAccountId        String
-    refresh_token            String? // @db.Text
-    access_token             String? // @db.Text
-    expires_at               Int?
-    token_type               String?
-    scope                    String?
-    id_token                 String? // @db.Text
-    session_state            String?
-    user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-    refresh_token_expires_in Int?
-
-    @@unique([provider, providerAccountId])
-}
-
-model Session {
-    id           String   @id @default(cuid())
-    sessionToken String   @unique
-    userId       String
-    expires      DateTime
-    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, friendId])
+  @@map("friendships")
 }
 
 model User {
-    id            String    @id @default(cuid())
-    name          String?
-    email         String?   @unique
-    emailVerified DateTime?
-    image         String?
-    accounts      Account[]
-    sessions      Session[]
-    posts         Post[]
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  email       String    @unique
+  name        String?
+  image       String?
+  emailVerified DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relationships
+  accounts     Account[]
+  sessions     Session[]
+  posts        Post[]
+  sentRequests     FriendRequest[] @relation("FriendRequestSender")
+  receivedRequests FriendRequest[] @relation("FriendRequestReceiver")
+  friendshipsAsUser Friendship[] @relation("UserFriends")
+  friendshipsAsFriend Friendship[] @relation("FriendUsers")
+  chats        ChatMember[]
+  messages     Message[]
+
+  @@map("users")
+}
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.String
+  access_token      String? @db.String
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.String
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
-model VerificationToken {
-    identifier String
-    token      String   @unique
-    expires    DateTime
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@unique([identifier, token])
+  @@map("sessions")
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  content   String?
+  image     String?
+  video     String?
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String   @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("posts")
+}
+
+model FriendRequest {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  fromUser   User     @relation("FriendRequestSender", fields: [fromUserId], references: [id])
+  fromUserId String   @db.ObjectId
+  toUser     User     @relation("FriendRequestReceiver", fields: [toUserId], references: [id])
+  toUserId   String   @db.ObjectId
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+
+  @@unique([fromUserId, toUserId])
+  @@map("friend_requests")
+}
+
+model Chat {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  members   ChatMember[]
+  messages  Message[]
+  createdAt DateTime @default(now())
+
+  @@map("chats")
+}
+
+model ChatMember {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  chatId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @db.ObjectId
+  joinedAt  DateTime @default(now())
+
+  @@unique([chatId, userId])
+  @@map("chat_members")
+}
+
+model Message {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  chatId    String   @db.ObjectId
+  sender    User     @relation(fields: [senderId], references: [id])
+  senderId  String   @db.ObjectId
+  timestamp DateTime @default(now())
+
+  @@map("messages")
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
