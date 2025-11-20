@@ -51,8 +51,10 @@ export function ChatWindow({
     data: chatData,
     isPending: isLoading,
     error: queryError,
+    mutateAsync: getOrCreateChat,
   } = api.chat.getOrCreateChat.useMutation({
     onSuccess: (data) => {
+      console.log("🚀 ~ ChatWindow ~ data:", data);
       setChatId(data.id);
       setMessages(data.messages);
       setError(null);
@@ -94,6 +96,16 @@ export function ChatWindow({
   }, [messages]);
 
   useEffect(() => {
+    const initializeChat = async () => {
+      if (session?.user?.id && friendId) {
+        await getOrCreateChat({ friendId });
+      }
+    };
+
+    void initializeChat();
+  }, [session?.user?.id, friendId, getOrCreateChat]);
+
+  useEffect(() => {
     if (queryError) {
       setError(queryError.message);
     }
@@ -103,13 +115,10 @@ export function ChatWindow({
   useEffect(() => {
     if (!session?.user?.id || !chatId) return;
 
-    const newSocket = io(
-      process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:3001", // Different port for Socket.io
-      {
-        withCredentials: true,
-        transports: ["websocket", "polling"],
-      },
-    );
+    const newSocket = io(process.env.NEXTAUTH_URL ?? "http://localhost:3000", {
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
     setSocket(newSocket);
 
     // User goes online
@@ -158,15 +167,16 @@ export function ChatWindow({
   }, [session?.user?.id, chatId, friendId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
+    console.log("🚀 ~ handleSendMessage ~ e:", chatId);
     e.preventDefault();
     if (!message.trim() || !chatId || !session?.user?.id) return;
+    console.log("🚀 ~ handleSendMessage ~ message:", message);
 
     const messageData = {
       chatId,
       content: message.trim(),
     };
 
-    // Optimistically update UI
     const optimisticMessage: MessageWithSender = {
       id: `temp-${Date.now()}`,
       content: message.trim(),
@@ -376,6 +386,7 @@ export function ChatWindow({
           />
           <button
             type="submit"
+            onClick={handleSendMessage}
             disabled={!message.trim() || sendMessageMutation.isPending}
             className="rounded-full bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
