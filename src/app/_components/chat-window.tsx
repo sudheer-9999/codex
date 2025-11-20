@@ -54,7 +54,7 @@ export function ChatWindow({
     mutateAsync: getOrCreateChat,
   } = api.chat.getOrCreateChat.useMutation({
     onSuccess: (data) => {
-      console.log("🚀 ~ ChatWindow ~ data:", data);
+      console.log("🚀 Chat created/retrieved:", data);
       setChatId(data.id);
       setMessages(data.messages);
       setError(null);
@@ -95,6 +95,7 @@ export function ChatWindow({
     scrollToBottom();
   }, [messages]);
 
+  // Initialize chat
   useEffect(() => {
     const initializeChat = async () => {
       if (session?.user?.id && friendId) {
@@ -111,66 +112,166 @@ export function ChatWindow({
     }
   }, [queryError]);
 
-  // Socket.io setup
+  // Socket.io setup - FIXED TYPING EVENTS
   useEffect(() => {
     if (!session?.user?.id || !chatId) return;
 
-    const newSocket = io(process.env.NEXTAUTH_URL ?? "http://localhost:3000", {
+    const SOCKET_URL = "http://localhost:5000";
+
+    console.log("🔌 Connecting to socket server:", SOCKET_URL);
+
+    const newSocket = io(SOCKET_URL, {
       withCredentials: true,
       transports: ["websocket", "polling"],
     });
+
     setSocket(newSocket);
 
-    // User goes online
-    newSocket.emit("user_online", session.user.id);
+    // Connection events
+    newSocket.on("connect", () => {
+      console.log("✅ Connected to socket server");
 
-    // Join chat room
-    newSocket.emit("join_chat", chatId);
+      // User goes online after connection is established
+      newSocket.emit("user_online", {
+        userId: session.user.id,
+        userInfo: {
+          name: session.user.name,
+          email: session.user.email,
+          image: session.user.image,
+        },
+      });
+
+      // Join chat room
+      newSocket.emit("join_chat", chatId);
+    });
 
     // Listen for messages
     newSocket.on("receive_message", (newMessage: SocketMessage) => {
+      console.log("📨 Received message:", newMessage);
       setMessages((prev) => [...prev, newMessage as MessageWithSender]);
     });
 
-    // Listen for online status
-    newSocket.on("friend_online", (userId: string) => {
-      if (userId === friendId) {
-        setIsOnline(true);
-      }
-    });
+    // Listen for ANY user status changes
+    newSocket.on(
+      "user_status_changed",
+      (data: { userId: string; isOnline: boolean }) => {
+        console.log(
+          `👤 User ${data.userId} is now ${data.isOnline ? "online" : "offline"}`,
+        );
 
-    newSocket.on("friend_offline", (userId: string) => {
-      if (userId === friendId) {
-        setIsOnline(false);
-      }
-    });
+        // If the status change is for our friend, update their status
+        if (data.userId === friendId) {
+          setIsOnline(data.isOnline);
+          console.log(
+            `🎯 Friend ${friendId} status updated: ${data.isOnline ? "online" : "offline"}`,
+          );
+        }
+      },
+    );
 
-    // Listen for typing indicators
-    newSocket.on("user_typing", (data: { userId: string; chatId: string }) => {
-      if (data.userId === friendId && data.chatId === chatId) {
-        setIsTyping(true);
-      }
-    });
+    // Get initial list of online users when connecting
+    newSocket.on(
+      "online_users_list",
+      (onlineUsers: Array<{ userId: string; isOnline: boolean }>) => {
+        console.log("📋 Received online users list:", onlineUsers);
+
+        // Check if our friend is in the online users list
+        const friendStatus = onlineUsers.find(
+          (user) => user.userId === friendId,
+        );
+        if (friendStatus) {
+          setIsOnline(true);
+          console.log(`🎯 Friend ${friendId} is online (from initial list)`);
+        } else {
+          setIsOnline(false);
+          console.log(`🎯 Friend ${friendId} is offline (from initial list)`);
+        }
+      },
+    );
+
+    // FIXED: Listen for typing indicators - using correct event names
+    newSocket.on(
+      "user_typing",
+      (data: { userId: string; chatId: string; isTyping: boolean }) => {
+        console.log(
+          `⌨️ User ${data.userId} typing status: ${data.isTyping} in chat ${data.chatId}`,
+        );
+        if (
+          data.userId === friendId &&
+          data.chatId === chatId &&
+          data.isTyping
+        ) {
+          setIsTyping(true);
+          console.log(`🎯 Friend ${friendId} is typing`);
+        }
+      },
+    );
 
     newSocket.on(
       "user_stop_typing",
-      (data: { userId: string; chatId: string }) => {
+      (data: { userId: string; chatId: string; isTyping: boolean }) => {
+        console.log(
+          `💤 User ${data.userId} stopped typing in chat ${data.chatId}`,
+        );
+        if (data.userId === friendId && data.chatId === chatId) {
+          setIsTyping(false);
+          console.log(`🎯 Friend ${friendId} stopped typing`);
+        }
+      },
+    );
+
+    // Alternative typing events (for backward compatibility)
+    newSocket.on(
+      "user_typing_started",
+      (data: { userId: string; chatId: string; typingUsers: string[] }) => {
+        console.log(
+          `⌨️ User ${data.userId} started typing in chat ${data.chatId}`,
+        );
+        if (data.userId === friendId && data.chatId === chatId) {
+          setIsTyping(true);
+        }
+      },
+    );
+
+    newSocket.on(
+      "user_typing_stopped",
+      (data: { userId: string; chatId: string; typingUsers: string[] }) => {
+        console.log(
+          `💤 User ${data.userId} stopped typing in chat ${data.chatId}`,
+        );
         if (data.userId === friendId && data.chatId === chatId) {
           setIsTyping(false);
         }
       },
     );
 
+    newSocket.on("disconnect", () => {
+      console.log("❌ Disconnected from socket server");
+      setIsOnline(false);
+      setIsTyping(false);
+    });
+
+    newSocket.on("connect_error", (error) => {
+      console.error("💥 Socket connection error:", error);
+      setError("Failed to connect to chat server");
+    });
+
     return () => {
+      console.log("🧹 Cleaning up socket connection");
+      // Stop typing when component unmounts
+      if (chatId && session?.user?.id) {
+        newSocket.emit("typing_stop", { chatId, userId: session.user.id });
+      }
+      if (chatId) {
+        newSocket.emit("leave_chat", chatId);
+      }
       newSocket.disconnect();
     };
   }, [session?.user?.id, chatId, friendId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
-    console.log("🚀 ~ handleSendMessage ~ e:", chatId);
     e.preventDefault();
     if (!message.trim() || !chatId || !session?.user?.id) return;
-    console.log("🚀 ~ handleSendMessage ~ message:", message);
 
     const messageData = {
       chatId,
@@ -195,13 +296,41 @@ export function ChatWindow({
     setMessage("");
 
     // Stop typing indicator
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
     socket?.emit("typing_stop", { chatId, userId: session.user.id });
+    socket?.emit("user_typing", {
+      chatId,
+      userId: session.user.id,
+      isTyping: false,
+    });
 
     try {
       // Save to database
-      await sendMessageMutation.mutateAsync(messageData);
+      const result = await sendMessageMutation.mutateAsync(messageData);
 
-      // Refetch messages to get the actual message from database
+      // Replace optimistic message with real message from database
+      setMessages((prev) =>
+        prev.filter((msg) => msg.id !== optimisticMessage.id),
+      );
+
+      // Add the real message
+      if (result) {
+        setMessages((prev) => [...prev, result]);
+
+        // Emit socket event for real-time messaging
+        socket?.emit("send_message", {
+          chatId,
+          message: {
+            ...result,
+            timestamp: new Date(result.timestamp),
+          },
+        });
+      }
+
+      // Refetch messages to ensure consistency
       await utils.chat.getMessages.invalidate({ chatId });
     } catch (error) {
       console.error("Failed to send message:", error);
@@ -213,21 +342,65 @@ export function ChatWindow({
     }
   };
 
+  // FIXED: Enhanced typing handler
   const handleTyping = () => {
-    if (!chatId || !session?.user?.id) return;
+    if (!chatId || !session?.user?.id || !socket) return;
 
-    // Start typing indicator
-    socket?.emit("typing_start", { chatId, userId: session.user.id });
+    console.log("⌨️ User started typing...");
 
     // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
+    // Start typing indicator
+    socket.emit("user_typing", {
+      chatId,
+      userId: session.user.id,
+      isTyping: true,
+    });
+    socket.emit("typing_start", {
+      chatId,
+      userId: session.user.id,
+    });
+
     // Stop typing after 2 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
-      socket?.emit("typing_stop", { chatId, userId: session.user.id });
+      console.log("💤 Auto-stop typing after inactivity");
+      socket.emit("user_typing", {
+        chatId,
+        userId: session.user.id,
+        isTyping: false,
+      });
+      socket.emit("typing_stop", {
+        chatId,
+        userId: session.user.id,
+      });
+      setIsTyping(false);
     }, 2000);
+  };
+
+  // Handle input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessage(e.target.value);
+    if (e.target.value.trim()) {
+      handleTyping();
+    } else {
+      // If input is empty, stop typing
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      socket?.emit("user_typing", {
+        chatId,
+        userId: session?.user?.id,
+        isTyping: false,
+      });
+      socket?.emit("typing_stop", {
+        chatId,
+        userId: session?.user?.id,
+      });
+    }
   };
 
   const formatTime = (timestamp: string | Date) => {
@@ -295,6 +468,7 @@ export function ChatWindow({
             <h3 className="text-sm font-semibold">{friendName}</h3>
             <p className="text-xs text-gray-500">
               {isOnline ? "Online" : "Offline"}
+              {isTyping && " • Typing..."}
             </p>
           </div>
         </div>
@@ -359,6 +533,7 @@ export function ChatWindow({
                       style={{ animationDelay: "0.4s" }}
                     ></div>
                   </div>
+                  <p className="mt-1 text-xs text-gray-500">typing...</p>
                 </div>
               </div>
             )}
@@ -376,9 +551,22 @@ export function ChatWindow({
           <input
             type="text"
             value={message}
-            onChange={(e) => {
-              setMessage(e.target.value);
-              handleTyping();
+            onChange={handleInputChange}
+            onBlur={() => {
+              // Stop typing when input loses focus
+              if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = null;
+              }
+              socket?.emit("user_typing", {
+                chatId,
+                userId: session?.user?.id,
+                isTyping: false,
+              });
+              socket?.emit("typing_stop", {
+                chatId,
+                userId: session?.user?.id,
+              });
             }}
             placeholder="Type a message..."
             className="flex-1 rounded-full border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -386,7 +574,6 @@ export function ChatWindow({
           />
           <button
             type="submit"
-            onClick={handleSendMessage}
             disabled={!message.trim() || sendMessageMutation.isPending}
             className="rounded-full bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
