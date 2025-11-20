@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { api } from "~/trpc/react";
 import { ChatWindow } from "./chat-window";
+import { MessageCircle } from "lucide-react";
 
 interface TFriend {
   name: string | null;
@@ -11,7 +12,6 @@ interface TFriend {
 }
 
 export function FriendsList() {
-  // Fetch friends using tRPC
   const {
     data: friends,
     isLoading,
@@ -22,34 +22,49 @@ export function FriendsList() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
-        <span className="ml-2">Loading friends...</span>
+      <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
+        {[1, 2, 3, 4, 1, 5, 8, 74].map((_, i) => (
+          <div
+            key={i}
+            className="flex animate-pulse items-center justify-between rounded-2xl border bg-white p-4 shadow-sm sm:p-5"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="h-12 w-12 rounded-full bg-gray-200 sm:h-14 sm:w-14" />
+              <div className="space-y-2">
+                <div className="h-4 w-32 rounded bg-gray-200 sm:w-40" />
+                <div className="h-3 w-24 rounded bg-gray-200 sm:w-28" />
+              </div>
+            </div>
+            <div className="h-6 w-16 rounded-full bg-gray-200 sm:w-20" />
+          </div>
+        ))}
       </div>
     );
   }
 
   if (isError || !friends) {
     return (
-      <div className="rounded-md border border-red-200 bg-red-50 p-4">
-        <p className="text-red-800">Error loading friends</p>
+      <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-700 shadow-sm">
+        Error loading friends
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl p-4">
-      <h2 className="mb-6 text-2xl font-bold">Your Friends</h2>
+    <div className="mx-auto max-w-4xl p-4 sm:p-6">
+      <h2 className="mb-6 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+        Your Friends
+      </h2>
 
       {friends.length === 0 ? (
-        <div className="py-8 text-center">
-          <p className="text-lg text-gray-500">No friends yet</p>
-          <p className="text-gray-400">
+        <div className="rounded-xl bg-gray-50 py-10 text-center shadow-sm sm:py-12">
+          <p className="text-lg text-gray-600 sm:text-xl">No friends yet</p>
+          <p className="mt-1 text-gray-400">
             Start adding friends to see them here!
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4 sm:gap-5">
           {friends.map((friend) => (
             <FriendCard key={friend.id} friend={friend} />
           ))}
@@ -66,75 +81,51 @@ interface Props {
 const FriendCard: React.FC<Props> = ({ friend }) => {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
-  const handleChatClick = () => {
-    setIsChatOpen(true);
-  };
-
-  const handleCloseChat = () => {
-    setIsChatOpen(false);
-  };
+  const handleChatClick = () => setIsChatOpen(true);
+  const handleCloseChat = () => setIsChatOpen(false);
 
   return (
     <>
-      <div className="flex items-center space-x-4 rounded-lg bg-white p-4 shadow-md transition-shadow hover:shadow-lg">
-        {/* Profile Image */}
-        <div className="shrink-0">
-          {friend.image ? (
-            <img
-              src={friend.image}
-              alt={friend.name ?? "Friend"}
-              className="h-12 w-12 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-300">
-              <span className="font-medium text-gray-600">
-                {(friend.name ?? "U").charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Friend Info */}
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {friend.name ?? "Unknown User"}
-          </h3>
-          {friend.email && (
-            <p className="text-sm text-gray-600">{friend.email}</p>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Status Badge */}
-          <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
-            Friends
-          </span>
-
-          {/* Chat Icon */}
-          <button
-            onClick={handleChatClick}
-            className="flex items-center justify-center rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-            title="Start chat"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+      <div className="rounded-2xl bg-white p-4 shadow-md transition-all hover:shadow-xl sm:p-5">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center sm:gap-6">
+          <div className="flex items-center gap-4">
+            {friend.image ? (
+              <img
+                src={friend.image}
+                alt={friend.name ?? "Friend"}
+                className="h-12 w-12 rounded-full object-cover ring-2 ring-gray-200 sm:h-14 sm:w-14"
               />
-            </svg>
-          </button>
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-200 text-lg font-semibold text-gray-600 ring-2 ring-gray-300 sm:h-14 sm:w-14 sm:text-xl">
+                {(friend.name ?? "U").charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 sm:text-xl">
+                {friend.name ?? "Unknown User"}
+              </h3>
+              {friend.email && (
+                <p className="pt-1 text-sm text-gray-600">{friend.email}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 shadow-sm sm:text-sm">
+              Friends
+            </span>
+
+            <button
+              onClick={handleChatClick}
+              className="rounded-full p-2 transition hover:bg-blue-50 hover:text-blue-600"
+            >
+              <MessageCircle className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Chat Window */}
       {isChatOpen && (
         <ChatWindow
           friendId={friend.id}
