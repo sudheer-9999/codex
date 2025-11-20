@@ -1,4 +1,5 @@
 import type { Session } from "next-auth";
+import type { User, Chat, Message, ChatMember } from "@prisma/client";
 
 export type Post = {
   id: string;
@@ -14,3 +15,14 @@ export type Post = {
   };
 };
 export type SessionType = Session | null;
+
+export type MessageWithSender = Message & {
+  sender: Pick<User, "id" | "name" | "image">;
+};
+
+export type ChatWithRelations = Chat & {
+  members: (ChatMember & {
+    user: Pick<User, "id" | "name" | "image">;
+  })[];
+  messages: MessageWithSender[];
+};

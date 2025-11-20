@@ -1,12 +1,12 @@
 "use client";
-
+import React from "react";
+import { FriendsList } from "../_components/FriendsList";
+import { FriendRequests } from "../_components/friend-requests";
+import { SignOut } from "../_components/sign-out";
 import { useSession } from "next-auth/react";
-import { CreatePost } from "./_components/create-post";
-import { PostsFeed } from "./_components/posts-feed";
-import { SignIn } from "./_components/sign-in";
-import { SignOut } from "./_components/sign-out";
+import { SignIn } from "../_components/sign-in";
 
-export default function Home() {
+const Page = () => {
   const { data: session, status } = useSession();
 
   if (status === "loading") {
@@ -29,7 +29,6 @@ export default function Home() {
       </main>
     );
   }
-
   return (
     <main className="min-h-screen bg-gray-100">
       <header className="border-b bg-white shadow-sm">
@@ -48,9 +47,11 @@ export default function Home() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <CreatePost />
-        <PostsFeed />
+        <FriendRequests />
+        <FriendsList />
       </div>
     </main>
   );
-}
+};
+
+export default Page;
