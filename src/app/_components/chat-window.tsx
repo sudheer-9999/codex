@@ -130,7 +130,7 @@ export function ChatWindow({
   useEffect(() => {
     if (!session?.user?.id || !chatId) return;
 
-    const SOCKET_URL = process.env.SOCKET_URL!;
+    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL!;
 
     console.log("🔌 Connecting to socket server:", SOCKET_URL);
 
